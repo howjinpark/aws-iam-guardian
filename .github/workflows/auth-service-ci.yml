@@ -113,6 +113,9 @@ jobs:
   security-scan:
     name: 보안 스캔
     runs-on: ubuntu-latest
+    permissions:            # ✅ SARIF 업로드 권한
+      security-events: write
+      contents: read
     
     steps:
       - name: 코드 체크아웃
@@ -139,7 +142,7 @@ jobs:
           output: 'trivy-fs-results.sarif'
       
       - name: SARIF 결과 업로드
-        uses: github/codeql-action/upload-sarif@v2
+        uses: github/codeql-action/upload-sarif@v3    # ✅ v3로 변경
         if: always()
         with:
           sarif_file: 'trivy-fs-results.sarif'
@@ -154,6 +157,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      security-events: write   # ✅ SARIF 업로드 권한 추가
     
     steps:
       - name: 코드 체크아웃
@@ -198,7 +202,7 @@ jobs:
           output: 'trivy-image-results.sarif'
       
       - name: 이미지 SARIF 결과 업로드
-        uses: github/codeql-action/upload-sarif@v2
+        uses: github/codeql-action/upload-sarif@v3    # ✅ v3로 변경
         if: always()
         with:
           sarif_file: 'trivy-image-results.sarif'
@@ -222,11 +226,7 @@ jobs:
         run: |
           cd gitops
           NEW_TAG="${{ github.sha }}"
-          
-          # Kustomization 파일에서 이미지 태그 업데이트
           sed -i "s|newTag:.*|newTag: ${NEW_TAG}|g" overlays/production/kustomization.yaml
-          
-          # 변경사항 커밋 및 푸시
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add .

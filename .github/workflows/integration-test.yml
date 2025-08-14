@@ -25,7 +25,7 @@ jobs:
           POSTGRES_USER: test_user
           POSTGRES_PASSWORD: test_pass
         options: >-
-          --health-cmd pg_isready
+          --health-cmd pg_isready -U test_user -d integration_test_db
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -62,11 +62,11 @@ jobs:
               extra_hosts:
                 - "host.docker.internal:host-gateway"
               healthcheck:
-                test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
-                interval: 30s
-                timeout: 10s
-                retries: 3
-                start_period: 40s
+                test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+                interval: 10s
+                timeout: 5s
+                retries: 5
+                start_period: 20s
             
             iam-manager:
               build: 
@@ -89,29 +89,29 @@ jobs:
               extra_hosts:
                 - "host.docker.internal:host-gateway"
               healthcheck:
-                test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8001/health')"]
-                interval: 30s
-                timeout: 10s
-                retries: 3
-                start_period: 40s
+                test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+                interval: 10s
+                timeout: 5s
+                retries: 5
+                start_period: 20s
           EOF
       
       - name: 서비스 시작 및 헬스체크
         run: |
+          set -e
           echo "Docker Compose로 서비스 시작..."
-          docker compose -f docker-compose.test.yml up -d
+          docker compose -f docker-compose.test.yml up -d --build
           
           echo "서비스 헬스체크 대기 중..."
-          # Docker Compose 헬스체크가 완료될 때까지 대기
-          timeout=300  # 5분 타임아웃
+          timeout=300
           elapsed=0
           
           while [ $elapsed -lt $timeout ]; do
-            if docker compose -f docker-compose.test.yml ps --format json | jq -r '.[].Health' | grep -q "healthy"; then
+            HEALTHS=$(docker compose -f docker-compose.test.yml ps --format json | jq -r '.[].Health')
+            if echo "$HEALTHS" | grep -q "healthy"; then
               echo "서비스가 정상적으로 시작되었습니다."
               break
             fi
-            
             echo "서비스 시작 대기 중... ($elapsed/$timeout 초)"
             sleep 10
             elapsed=$((elapsed + 10))
@@ -123,40 +123,37 @@ jobs:
             exit 1
           fi
           
-          # 최종 헬스체크
           echo "=== 최종 헬스체크 ==="
           curl -f http://localhost:8000/health && echo "Auth Service: OK"
           curl -f http://localhost:8001/health && echo "IAM Manager: OK"
       
       - name: 통합 테스트 실행
         run: |
-          # Auth Service 테스트
+          set -e
           echo "=== Auth Service 테스트 ==="
           
-          # 관리자 생성
-          ADMIN_RESPONSE=$(curl -s -X POST http://localhost:8000/api/v1/users/init-admin \
+          ADMIN_RESPONSE=$(curl -s -f -X POST http://localhost:8000/api/v1/users/init-admin \
             -H "Content-Type: application/json" \
             -d '{"username":"testadmin","password":"TestPass123!"}')
           echo "관리자 생성: $ADMIN_RESPONSE"
           
-          # 로그인
-          LOGIN_RESPONSE=$(curl -s -X POST http://localhost:8000/api/v1/auth/login \
+          LOGIN_RESPONSE=$(curl -s -f -X POST http://localhost:8000/api/v1/auth/login \
             -H "Content-Type: application/json" \
             -d '{"username":"testadmin","password":"TestPass123!"}')
           echo "로그인: $LOGIN_RESPONSE"
           
-          TOKEN=$(echo $LOGIN_RESPONSE | jq -r '.access_token' 2>/dev/null || echo "토큰 추출 실패")
+          TOKEN=$(echo $LOGIN_RESPONSE | jq -r '.access_token')
+          if [ -z "$TOKEN" ]; then
+            echo "토큰 추출 실패"
+            exit 1
+          fi
           echo "토큰: $TOKEN"
           
-          # IAM Manager Service 테스트
           echo "=== IAM Manager Service 테스트 ==="
-          
-          # 계정 목록 조회
-          ACCOUNTS_RESPONSE=$(curl -s http://localhost:8001/api/v1/accounts/)
+          ACCOUNTS_RESPONSE=$(curl -s -f http://localhost:8001/api/v1/accounts/)
           echo "계정 목록: $ACCOUNTS_RESPONSE"
           
-          # Mock AWS 사용자 조회 (실제 AWS 없이 테스트)
-          USERS_RESPONSE=$(curl -s http://localhost:8001/api/v1/accounts/main/users || echo "AWS Mock 필요")
+          USERS_RESPONSE=$(curl -s -f http://localhost:8001/api/v1/accounts/main/users || echo "AWS Mock 필요")
           echo "사용자 목록: $USERS_RESPONSE"
       
       - name: 로그 수집
@@ -173,7 +170,7 @@ jobs:
         run: |
           docker compose -f docker-compose.test.yml down -v
 
-  # 성능 테스트
+  # 성능 테스트 (현재 비활성화)
   performance-test:
     name: 성능 테스트
     runs-on: ubuntu-latest
@@ -184,14 +181,7 @@ jobs:
       - name: 코드 체크아웃
         uses: actions/checkout@v4
       
-      - name: 성능 테스트 스킵 (현재 비활성화)
+      - name: 성능 테스트 스킵
         run: |
           echo "성능 테스트는 현재 비활성화되어 있습니다."
-          echo "실제 서비스 배포 후 활성화할 예정입니다."
-      
-      # - name: K6 성능 테스트
-      #   uses: grafana/k6-action@v0.3.1
-      #   with:
-      #     filename: tests/performance/load-test.js
-      #   env:
-      #     BASE_URL: http://localhost:8000
+          echo "실제 서비스 배포 후 활성화 예정"

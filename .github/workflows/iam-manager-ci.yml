@@ -116,25 +116,30 @@ jobs:
   security-scan:
     name: 보안 스캔
     runs-on: ubuntu-latest
-    
+    permissions:
+      contents: read
+      security-events: write  # 보안 스캔 API 권한
     steps:
       - name: 코드 체크아웃
         uses: actions/checkout@v4
       
       - name: Python 보안 스캔 (Bandit)
         run: |
+          set -x  # 디버그 모드
           pip install bandit
           cd ${{ env.SERVICE_PATH }}
           bandit -r app/ -f json -o bandit-report.json || true
       
       - name: 의존성 취약점 스캔 (Safety)
         run: |
+          set -x
           pip install safety
           cd ${{ env.SERVICE_PATH }}
           safety check --json --output safety-report.json || true
       
       - name: AWS 자격증명 스캔 (git-secrets)
         run: |
+          set -x
           git clone https://github.com/awslabs/git-secrets.git
           cd git-secrets && make install
           cd ../${{ env.SERVICE_PATH }}
@@ -207,7 +212,6 @@ jobs:
           cd gitops
           NEW_TAG="${{ github.sha }}"
           
-          # IAM Manager Service 이미지 태그 업데이트
           sed -i "s|iam-manager-service:.*|iam-manager-service:${NEW_TAG}|g" overlays/production/kustomization.yaml
           
           git config --local user.email "action@github.com"
