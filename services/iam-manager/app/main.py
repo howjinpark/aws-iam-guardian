@@ -1,19 +1,20 @@
 """
 IAM Manager Service 메인 애플리케이션
 """
-from fastapi import FastAPI, Request, status
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from fastapi.exceptions import RequestValidationError
-from contextlib import asynccontextmanager
 import logging
 import sys
+from contextlib import asynccontextmanager
 from datetime import datetime
 
-from .config import settings
-from .database import create_tables, check_database_connection
+from fastapi import FastAPI, Request, status
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
 from .aws_client import aws_client_manager
-from .schemas import HealthCheck, ErrorResponse
+from .config import settings
+from .database import check_database_connection, create_tables
+from .schemas import ErrorResponse, HealthCheck
 
 
 # 로깅 설정
@@ -160,7 +161,7 @@ async def log_requests(request: Request, call_next):
 
 
 # 라우터 등록
-from .routers import iam, analysis
+from .routers import analysis, iam
 
 app.include_router(iam.router, prefix="/api/v1")
 app.include_router(analysis.router, prefix="/api/v1")
@@ -174,7 +175,8 @@ async def root():
         "service": settings.app_name,
         "version": settings.app_version,
         "status": "running",
-        "docs_url": "/docs" if settings.debug else "disabled"
+        "docs_url": "/docs" if settings.debug else "disabled",
+        "container_registry": "ghcr.io"
     }
 
 

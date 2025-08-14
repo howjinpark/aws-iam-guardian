@@ -2,19 +2,20 @@
 Auth Service 메인 애플리케이션
 FastAPI 앱 설정 및 라우터 등록
 """
-from fastapi import FastAPI, Request, status
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from fastapi.exceptions import RequestValidationError
-from contextlib import asynccontextmanager
 import logging
 import sys
+from contextlib import asynccontextmanager
 from datetime import datetime
 
+from fastapi import FastAPI, Request, status
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
 from .config import settings
-from .database import create_tables, check_database_connection
+from .database import check_database_connection, create_tables
 from .routers import auth, users
-from .schemas import HealthCheck, ErrorResponse
+from .schemas import ErrorResponse, HealthCheck
 
 
 # 로깅 설정
@@ -174,7 +175,8 @@ async def root():
         "service": settings.app_name,
         "version": settings.app_version,
         "status": "running",
-        "docs_url": "/docs" if settings.debug else "disabled"
+        "docs_url": "/docs" if settings.debug else "disabled",
+        "container_registry": "ghcr.io"
     }
 
 
