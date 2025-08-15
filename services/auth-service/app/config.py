@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     
     class Config:
-        env_file = ".env"
+        env_file = [".env.local", ".env"]  # .env.local을 우선으로 읽기
         case_sensitive = False
 
 

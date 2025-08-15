@@ -76,3 +76,38 @@ class AuditLog(Base):
     
     def __repr__(self):
         return f"<AuditLog(id={self.id}, action='{self.action}', result='{self.result}')>"
+
+
+class Role(Base):
+    """역할 모델"""
+    __tablename__ = "roles"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(50), unique=True, index=True, nullable=False)
+    description = Column(String(200), nullable=True)
+    
+    # 권한 정보 (JSON 형태로 저장)
+    permissions = Column(Text, nullable=True)  # JSON 배열
+    
+    # 메타데이터
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    def __repr__(self):
+        return f"<Role(id={self.id}, name='{self.name}')>"
+
+
+class UserRole(Base):
+    """사용자-역할 연결 모델"""
+    __tablename__ = "user_roles"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    role_id = Column(Integer, nullable=False, index=True)
+    
+    # 메타데이터
+    assigned_at = Column(DateTime(timezone=True), server_default=func.now())
+    assigned_by = Column(Integer, nullable=True)  # 할당한 사용자 ID
+    
+    def __repr__(self):
+        return f"<UserRole(user_id={self.user_id}, role_id={self.role_id})>"

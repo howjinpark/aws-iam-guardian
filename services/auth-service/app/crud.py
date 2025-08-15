@@ -247,3 +247,79 @@ class AuditCRUD:
             logger.error(f"감사 로그 생성 실패: {e}")
             db.rollback()
             raise
+    
+    @staticmethod
+    def get_audit_logs(db: Session, user_id: Optional[int] = None, 
+                      action: Optional[str] = None, result: Optional[str] = None,
+                      skip: int = 0, limit: int = 100) -> List[models.AuditLog]:
+        """감사 로그 목록 조회"""
+        try:
+            query = db.query(models.AuditLog)
+            
+            # 필터 적용
+            if user_id is not None:
+                query = query.filter(models.AuditLog.user_id == user_id)
+            if action:
+                query = query.filter(models.AuditLog.action == action)
+            if result:
+                query = query.filter(models.AuditLog.result == result)
+            
+            # 최신순 정렬
+            query = query.order_by(models.AuditLog.created_at.desc())
+            
+            # 페이징
+            audit_logs = query.offset(skip).limit(limit).all()
+            
+            logger.debug(f"감사 로그 조회: {len(audit_logs)}개")
+            return audit_logs
+            
+        except Exception as e:
+            logger.error(f"감사 로그 조회 실패: {e}")
+            return []
+    
+    @staticmethod
+    def get_audit_log_stats(db: Session, user_id: Optional[int] = None) -> dict:
+        """감사 로그 통계 조회"""
+        try:
+            query = db.query(models.AuditLog)
+            
+            if user_id is not None:
+                query = query.filter(models.AuditLog.user_id == user_id)
+            
+            # 전체 로그 수
+            total_count = query.count()
+            
+            # 결과별 통계
+            success_count = query.filter(models.AuditLog.result == 'success').count()
+            failure_count = query.filter(models.AuditLog.result == 'failure').count()
+            error_count = query.filter(models.AuditLog.result == 'error').count()
+            
+            # 액션별 통계 (상위 10개)
+            from sqlalchemy import func
+            action_stats = db.query(
+                models.AuditLog.action,
+                func.count(models.AuditLog.id).label('count')
+            ).group_by(models.AuditLog.action).order_by(
+                func.count(models.AuditLog.id).desc()
+            ).limit(10).all()
+            
+            stats = {
+                'total_count': total_count,
+                'success_count': success_count,
+                'failure_count': failure_count,
+                'error_count': error_count,
+                'action_stats': [{'action': action, 'count': count} for action, count in action_stats]
+            }
+            
+            logger.debug(f"감사 로그 통계 조회 완료: total={total_count}")
+            return stats
+            
+        except Exception as e:
+            logger.error(f"감사 로그 통계 조회 실패: {e}")
+            return {
+                'total_count': 0,
+                'success_count': 0,
+                'failure_count': 0,
+                'error_count': 0,
+                'action_stats': []
+            }

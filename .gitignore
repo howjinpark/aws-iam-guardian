@@ -80,3 +80,5 @@ config
 *.tmp
 *.temp
 .cache/
+
+node_modules

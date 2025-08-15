@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     # AWS 기본 설정 (환경변수에서 읽기)
     aws_default_region: str = "ap-northeast-2"
     
+    # AWS 자격증명 (환경변수에서 읽기)
+    aws_access_key_id: Optional[str] = None
+    aws_secret_access_key: Optional[str] = None
+    
     # AWS 계정 ID (환경변수에서 자동 감지)
     aws_account_id: Optional[str] = None
     
@@ -50,7 +54,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     
     class Config:
-        env_file = ".env"
+        env_file = [".env.local", ".env"]  # .env.local을 우선으로 읽기
         case_sensitive = False
 
 

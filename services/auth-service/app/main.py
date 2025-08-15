@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse
 
 from .config import settings
 from .database import check_database_connection, create_tables
-from .routers import auth, users
+from .routers import auth, users, audit
 from .schemas import ErrorResponse, HealthCheck
 
 
@@ -97,15 +97,14 @@ app.add_middleware(
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """요청 검증 오류 처리"""
-    logger.warning(f"요청 검증 오류: {exc.errors()}")
+    logger.warning(f"요청 검증 오류: {str(exc)}")
     
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        content=ErrorResponse(
-            error="VALIDATION_ERROR",
-            message="요청 데이터가 올바르지 않습니다",
-            details={"errors": exc.errors()}
-        ).dict()
+        content={
+            "error": "VALIDATION_ERROR",
+            "message": "요청 데이터가 올바르지 않습니다"
+        }
     )
 
 
@@ -116,10 +115,10 @@ async def global_exception_handler(request: Request, exc: Exception):
     
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content=ErrorResponse(
-            error="INTERNAL_SERVER_ERROR",
-            message="서버 내부 오류가 발생했습니다"
-        ).dict()
+        content={
+            "error": "INTERNAL_SERVER_ERROR",
+            "message": "서버 내부 오류가 발생했습니다"
+        }
     )
 
 
@@ -165,6 +164,7 @@ async def log_requests(request: Request, call_next):
 # 라우터 등록
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(users.router, prefix="/api/v1")
+app.include_router(audit.router, prefix="/api/v1")
 
 
 # 기본 엔드포인트

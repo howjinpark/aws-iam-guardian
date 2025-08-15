@@ -11,7 +11,7 @@ import logging
 from ..database import get_database_session
 from ..schemas import LoginRequest, LoginResponse, UserResponse, ErrorResponse
 from ..crud import UserCRUD, SessionCRUD, AuditCRUD
-from ..security import verify_password, create_access_token, get_token_expire_time, verify_token
+from ..security import verify_password, create_access_token, create_refresh_token, get_token_expire_time, verify_token
 from ..dependencies import (
     get_current_user, get_current_user_token, validate_session, 
     get_client_info, security_scheme
@@ -104,6 +104,9 @@ async def login(
             expires_delta=access_token_expires
         )
         
+        # 리프레시 토큰 생성
+        refresh_token = create_refresh_token(data=token_data)
+        
         # 토큰에서 JTI 추출
         token_payload = verify_token(access_token)
         
@@ -133,6 +136,7 @@ async def login(
         
         return LoginResponse(
             access_token=access_token,
+            refresh_token=refresh_token,
             token_type="bearer",
             expires_in=get_token_expire_time(),
             user=UserResponse.from_orm(user)
@@ -261,34 +265,50 @@ async def verify_token_endpoint(
 
 
 @router.post("/refresh", summary="토큰 갱신")
-async def refresh_token(
+async def refresh_token_endpoint(
+    refresh_token: str,
     request: Request,
-    db: Session = Depends(get_database_session),
-    current_user: models.User = Depends(get_current_user),
-    token_data = Depends(get_current_user_token),
-    session: models.UserSession = Depends(validate_session)
+    db: Session = Depends(get_database_session)
 ):
     """
-    현재 토큰을 갱신합니다.
+    리프레시 토큰을 사용하여 새로운 액세스 토큰을 발급합니다.
     
-    기존 세션을 무효화하고 새로운 토큰을 발급합니다.
+    - **refresh_token**: 리프레시 토큰
     """
     client_info = get_client_info(request)
     
     try:
-        # 기존 세션 무효화
-        SessionCRUD.revoke_session(db, token_data.jti)
+        # 리프레시 토큰 검증
+        token_payload = verify_token(refresh_token)
         
-        # 새 토큰 생성
+        # 토큰 타입 확인
+        if token_payload.get("type") != "refresh":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="유효하지 않은 리프레시 토큰입니다"
+            )
+        
+        # 사용자 조회
+        user = UserCRUD.get_user_by_id(db, token_payload.user_id)
+        if not user or not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="유효하지 않은 사용자입니다"
+            )
+        
+        # 새 액세스 토큰 생성
         access_token_expires = timedelta(minutes=30)
         new_token_data = {
-            "sub": str(current_user.id),
-            "username": current_user.username
+            "sub": str(user.id),
+            "username": user.username
         }
         new_access_token = create_access_token(
             data=new_token_data,
             expires_delta=access_token_expires
         )
+        
+        # 새 리프레시 토큰 생성
+        new_refresh_token = create_refresh_token(data=new_token_data)
         
         # 새 토큰에서 JTI 추출
         new_token_payload = verify_token(new_access_token)
@@ -296,7 +316,7 @@ async def refresh_token(
         # 새 세션 생성
         SessionCRUD.create_session(
             db=db,
-            user_id=current_user.id,
+            user_id=user.id,
             token_jti=new_token_payload.jti,
             ip_address=client_info.get("ip_address"),
             user_agent=client_info.get("user_agent")
@@ -305,21 +325,24 @@ async def refresh_token(
         # 로그 기록
         AuditCRUD.create_audit_log(
             db=db,
-            user_id=current_user.id,
+            user_id=user.id,
             action="token_refresh",
             result="success",
             ip_address=client_info.get("ip_address"),
             user_agent=client_info.get("user_agent")
         )
         
-        logger.info(f"토큰 갱신 성공: user_id={current_user.id}")
+        logger.info(f"토큰 갱신 성공: user_id={user.id}")
         
         return {
             "access_token": new_access_token,
+            "refresh_token": new_refresh_token,
             "token_type": "bearer",
             "expires_in": get_token_expire_time()
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"토큰 갱신 중 오류: {e}")
         raise HTTPException(

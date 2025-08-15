@@ -57,6 +57,9 @@ class UserResponse(BaseModel):
     
     class Config:
         from_attributes = True
+        json_encoders = {
+            datetime: lambda v: v.isoformat() if v else None
+        }
 
 
 class LoginRequest(BaseModel):
@@ -68,6 +71,7 @@ class LoginRequest(BaseModel):
 class LoginResponse(BaseModel):
     """로그인 응답 스키마"""
     access_token: str = Field(..., description="JWT 액세스 토큰")
+    refresh_token: str = Field(..., description="JWT 리프레시 토큰")
     token_type: str = Field(default="bearer", description="토큰 타입")
     expires_in: int = Field(..., description="토큰 만료 시간(초)")
     user: UserResponse = Field(..., description="사용자 정보")
@@ -86,6 +90,11 @@ class HealthCheck(BaseModel):
     timestamp: datetime = Field(default_factory=datetime.utcnow, description="확인 시간")
     version: str = Field(..., description="서비스 버전")
     database: bool = Field(..., description="데이터베이스 연결 상태")
+    
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.isoformat() if v else None
+        }
 
 
 class ErrorResponse(BaseModel):
@@ -94,3 +103,70 @@ class ErrorResponse(BaseModel):
     message: str = Field(..., description="에러 메시지")
     details: Optional[dict] = Field(None, description="상세 정보")
     timestamp: datetime = Field(default_factory=datetime.utcnow, description="발생 시간")
+    
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.isoformat() if v else None
+        }
+
+
+class AuditLogResponse(BaseModel):
+    """감사 로그 응답 스키마"""
+    id: int
+    user_id: Optional[int] = None
+    action: str
+    resource: Optional[str] = None
+    result: str
+    details: Optional[str] = None
+    ip_address: Optional[str] = None
+    user_agent: Optional[str] = None
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+        json_encoders = {
+            datetime: lambda v: v.isoformat() if v else None
+        }
+
+
+class AuditLogStats(BaseModel):
+    """감사 로그 통계 스키마"""
+    total_count: int
+    success_count: int
+    failure_count: int
+    error_count: int
+    action_stats: list[dict]
+
+
+class RoleBase(BaseModel):
+    """역할 기본 스키마"""
+    name: str = Field(..., min_length=2, max_length=50, description="역할명")
+    description: Optional[str] = Field(None, max_length=200, description="역할 설명")
+
+
+class RoleCreate(RoleBase):
+    """역할 생성 스키마"""
+    permissions: list[str] = Field(default=[], description="권한 목록")
+
+
+class RoleUpdate(BaseModel):
+    """역할 수정 스키마"""
+    name: Optional[str] = None
+    description: Optional[str] = None
+    permissions: Optional[list[str]] = None
+
+
+class RoleResponse(BaseModel):
+    """역할 응답 스키마"""
+    id: int
+    name: str
+    description: Optional[str] = None
+    permissions: list[str]
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
+        json_encoders = {
+            datetime: lambda v: v.isoformat() if v else None
+        }

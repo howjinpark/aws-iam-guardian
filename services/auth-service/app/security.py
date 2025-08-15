@@ -55,7 +55,8 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
         to_encode.update({
             "exp": expire,
             "iat": datetime.utcnow(),
-            "jti": str(uuid.uuid4())  # JWT ID (토큰 무효화용)
+            "jti": str(uuid.uuid4()),  # JWT ID (토큰 무효화용)
+            "type": "access"  # 토큰 타입
         })
         
         # 토큰 생성
@@ -65,7 +66,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
             algorithm=settings.algorithm
         )
         
-        logger.info(f"JWT 토큰 생성 완료: user_id={data.get('sub')}")
+        logger.info(f"JWT 액세스 토큰 생성 완료: user_id={data.get('sub')}")
         return encoded_jwt
         
     except Exception as e:
@@ -73,6 +74,40 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="토큰 생성 중 오류가 발생했습니다"
+        )
+
+
+def create_refresh_token(data: dict) -> str:
+    """JWT 리프레시 토큰 생성"""
+    try:
+        to_encode = data.copy()
+        
+        # 리프레시 토큰은 더 긴 만료 시간 (7일)
+        expire = datetime.utcnow() + timedelta(days=7)
+        
+        # JWT 클레임 추가
+        to_encode.update({
+            "exp": expire,
+            "iat": datetime.utcnow(),
+            "jti": str(uuid.uuid4()),  # JWT ID
+            "type": "refresh"  # 토큰 타입
+        })
+        
+        # 토큰 생성
+        encoded_jwt = jwt.encode(
+            to_encode, 
+            settings.secret_key, 
+            algorithm=settings.algorithm
+        )
+        
+        logger.info(f"JWT 리프레시 토큰 생성 완료: user_id={data.get('sub')}")
+        return encoded_jwt
+        
+    except Exception as e:
+        logger.error(f"JWT 리프레시 토큰 생성 실패: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="리프레시 토큰 생성 중 오류가 발생했습니다"
         )
 
 
