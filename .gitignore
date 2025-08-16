@@ -33,7 +33,10 @@ ENV/
 .env.local
 .env.production
 .env.staging
+.env.development
 *.env
+services/*/.env*
+frontend/.env*
 
 # Database
 *.db
